@@ -1,10 +1,10 @@
 [package]
 name = "laravel-iam"
-version = "1.0.0"
+version = "1.0.1"
 edition = "2021"
 rust-version = "1.74"
 license = "MIT"
-description = "Thin, fail-closed Rust client for the Laravel IAM authorization server: remote policy decisions (decisions:check) and OIDC/JWKS token verification."
+description = "Thin, fail-closed Rust client for the Laravel IAM authorization server: remote policy decisions (decisions/check) and OIDC/JWKS token verification."
 repository = "https://github.com/padosoft/laravel-iam-rust"
 homepage = "https://github.com/padosoft/laravel-iam-rust"
 documentation = "https://docs.rs/laravel-iam"

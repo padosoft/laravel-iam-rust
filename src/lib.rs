@@ -2,7 +2,7 @@
 //!
 //! A thin, **fail-closed** Rust client for the [Laravel IAM](https://github.com/padosoft)
 //! authorization server. It speaks the canonical decision protocol
-//! (`POST {base_url}/decisions:check`) and verifies OIDC tokens against the server's JWKS —
+//! (`POST {base_url}/decisions/check`) and verifies OIDC tokens against the server's JWKS —
 //! mirroring the production PHP client's wire contract exactly, in idiomatic async Rust.
 //!
 //! There is **no policy logic on the client**: every decision is the server's. The client only

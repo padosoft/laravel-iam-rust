@@ -12,7 +12,7 @@ use serde_json::json;
 use wiremock::matchers::{body_json, header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-async fn client(server: &MockServer) -> IamClient {
+fn client(server: &MockServer) -> IamClient {
     IamClient::builder()
         .base_url(server.uri())
         .token("service-token")
@@ -36,7 +36,7 @@ fn sample_query() -> DecisionQuery {
 
 async fn mount_check(server: &MockServer, response: ResponseTemplate) {
     Mock::given(method("POST"))
-        .and(path("/decisions:check"))
+        .and(path("/decisions/check"))
         .respond_with(response)
         .mount(server)
         .await;
@@ -57,7 +57,7 @@ async fn check_happy_path_is_allowed() {
     )
     .await;
 
-    let result = client(&server).await.check(sample_query()).await;
+    let result = client(&server).check(sample_query()).await;
     let decision = result.expect("ok");
     assert!(decision.allowed);
     assert!(decision.granted());
@@ -71,7 +71,7 @@ async fn check_sends_exact_php_wire_shape() {
     let server = MockServer::start().await;
     // Body must match the PHP DecisionRequest::toArray() shape EXACTLY.
     Mock::given(method("POST"))
-        .and(path("/decisions:check"))
+        .and(path("/decisions/check"))
         .and(header("authorization", "Bearer service-token"))
         .and(header("accept", "application/json"))
         .and(body_json(json!({
@@ -89,7 +89,7 @@ async fn check_sends_exact_php_wire_shape() {
         .mount(&server)
         .await;
 
-    let result = client(&server).await.check(sample_query()).await;
+    let result = client(&server).check(sample_query()).await;
     assert!(result.is_allowed());
 }
 
@@ -106,7 +106,7 @@ async fn check_step_up_is_not_granted() {
     )
     .await;
 
-    let result = client(&server).await.check(sample_query()).await;
+    let result = client(&server).check(sample_query()).await;
     let decision = result.clone().expect("ok");
     assert!(decision.allowed);
     assert!(decision.requires_step_up);
@@ -119,7 +119,7 @@ async fn check_step_up_is_not_granted() {
 async fn check_500_denies() {
     let server = MockServer::start().await;
     mount_check(&server, ResponseTemplate::new(500)).await;
-    let result = client(&server).await.check(sample_query()).await;
+    let result = client(&server).check(sample_query()).await;
     assert!(matches!(result, Err(IamError::Http(500))));
     assert!(!result.is_allowed());
 }
@@ -128,7 +128,7 @@ async fn check_500_denies() {
 async fn check_400_denies() {
     let server = MockServer::start().await;
     mount_check(&server, ResponseTemplate::new(400)).await;
-    let result = client(&server).await.check(sample_query()).await;
+    let result = client(&server).check(sample_query()).await;
     assert!(matches!(result, Err(IamError::Http(400))));
     assert!(!result.is_allowed());
 }
@@ -137,7 +137,7 @@ async fn check_400_denies() {
 async fn check_401_denies() {
     let server = MockServer::start().await;
     mount_check(&server, ResponseTemplate::new(401)).await;
-    let result = client(&server).await.check(sample_query()).await;
+    let result = client(&server).check(sample_query()).await;
     assert!(matches!(result, Err(IamError::Unauthorized(401))));
     assert!(!result.is_allowed());
 }
@@ -146,7 +146,7 @@ async fn check_401_denies() {
 async fn check_403_denies() {
     let server = MockServer::start().await;
     mount_check(&server, ResponseTemplate::new(403)).await;
-    let result = client(&server).await.check(sample_query()).await;
+    let result = client(&server).check(sample_query()).await;
     assert!(matches!(result, Err(IamError::Unauthorized(403))));
     assert!(!result.is_allowed());
 }
@@ -159,7 +159,7 @@ async fn check_malformed_body_denies() {
         ResponseTemplate::new(200).set_body_string("this is not json"),
     )
     .await;
-    let result = client(&server).await.check(sample_query()).await;
+    let result = client(&server).check(sample_query()).await;
     assert!(matches!(result, Err(IamError::Malformed(_))));
     assert!(!result.is_allowed());
 }
@@ -172,7 +172,7 @@ async fn check_non_object_body_denies() {
         ResponseTemplate::new(200).set_body_json(json!([1, 2, 3])),
     )
     .await;
-    let result = client(&server).await.check(sample_query()).await;
+    let result = client(&server).check(sample_query()).await;
     assert!(matches!(result, Err(IamError::Malformed(_))));
     assert!(!result.is_allowed());
 }
@@ -186,7 +186,7 @@ async fn check_missing_allowed_denies() {
         ResponseTemplate::new(200).set_body_json(json!({ "decision_id": "dec_x" })),
     )
     .await;
-    let result = client(&server).await.check(sample_query()).await;
+    let result = client(&server).check(sample_query()).await;
     let decision = result.clone().expect("parses");
     assert!(!decision.allowed);
     assert!(!result.is_allowed());
@@ -219,7 +219,7 @@ async fn check_timeout_denies() {
             .set_body_json(json!({ "allowed": true })),
     )
     .await;
-    let result = client(&server).await.check(sample_query()).await;
+    let result = client(&server).check(sample_query()).await;
     assert!(matches!(result, Err(IamError::Timeout)));
     assert!(!result.is_allowed());
 }
@@ -228,7 +228,7 @@ async fn check_timeout_denies() {
 async fn list_resources_happy_path() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(path("/decisions:list-resources"))
+        .and(path("/decisions/list-resources"))
         .and(body_json(json!({
             "subject": { "type": "user", "id": "usr_123" },
             "relation": "viewer"
@@ -243,7 +243,6 @@ async fn list_resources_happy_path() {
         .await;
 
     let resources = client(&server)
-        .await
         .list_resources(Subject::user("usr_123"), "viewer")
         .await
         .expect("ok");
@@ -255,12 +254,11 @@ async fn list_resources_happy_path() {
 async fn list_resources_error_is_error() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(path("/decisions:list-resources"))
+        .and(path("/decisions/list-resources"))
         .respond_with(ResponseTemplate::new(500))
         .mount(&server)
         .await;
     let result = client(&server)
-        .await
         .list_resources(Subject::user("usr_123"), "viewer")
         .await;
     assert!(matches!(result, Err(IamError::Http(500))));
@@ -281,7 +279,6 @@ async fn verify_token_valid() {
     let token = common::sign_jwt(&common::valid_claims());
 
     let claims = client(&server)
-        .await
         .verify_token(&token)
         .await
         .expect("valid token");
@@ -301,7 +298,7 @@ async fn verify_token_expired_rejected() {
     });
     let token = common::sign_jwt(&claims);
 
-    let result = client(&server).await.verify_token(&token).await;
+    let result = client(&server).verify_token(&token).await;
     assert!(matches!(result, Err(IamError::TokenInvalid(_))));
 }
 
@@ -317,7 +314,7 @@ async fn verify_token_wrong_audience_rejected() {
     });
     let token = common::sign_jwt(&claims);
 
-    let result = client(&server).await.verify_token(&token).await;
+    let result = client(&server).verify_token(&token).await;
     assert!(matches!(result, Err(IamError::TokenInvalid(_))));
 }
 
@@ -333,7 +330,7 @@ async fn verify_token_wrong_issuer_rejected() {
     });
     let token = common::sign_jwt(&claims);
 
-    let result = client(&server).await.verify_token(&token).await;
+    let result = client(&server).verify_token(&token).await;
     assert!(matches!(result, Err(IamError::TokenInvalid(_))));
 }
 
@@ -343,7 +340,7 @@ async fn verify_token_unknown_kid_rejected() {
     mount_jwks(&server).await;
     let token = common::sign_jwt_with_kid(&common::valid_claims(), "nope");
 
-    let result = client(&server).await.verify_token(&token).await;
+    let result = client(&server).verify_token(&token).await;
     assert!(matches!(result, Err(IamError::TokenInvalid(_))));
 }
 
@@ -356,7 +353,7 @@ async fn verify_token_tampered_signature_rejected() {
     let last = token.pop().unwrap();
     token.push(if last == 'A' { 'B' } else { 'A' });
 
-    let result = client(&server).await.verify_token(&token).await;
+    let result = client(&server).verify_token(&token).await;
     assert!(matches!(result, Err(IamError::TokenInvalid(_))));
 }
 

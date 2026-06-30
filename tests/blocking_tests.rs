@@ -40,7 +40,7 @@ fn sample_query() -> DecisionQuery {
 async fn blocking_check_happy_path() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(path("/decisions:check"))
+        .and(path("/decisions/check"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "allowed": true,
             "decision_id": "dec_1"
@@ -60,7 +60,7 @@ async fn blocking_check_happy_path() {
 async fn blocking_check_500_denies() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(path("/decisions:check"))
+        .and(path("/decisions/check"))
         .respond_with(ResponseTemplate::new(500))
         .mount(&server)
         .await;
@@ -90,7 +90,7 @@ async fn blocking_check_network_error_denies() {
 async fn blocking_list_resources() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
-        .and(path("/decisions:list-resources"))
+        .and(path("/decisions/list-resources"))
         .respond_with(ResponseTemplate::new(200).set_body_json(json!({
             "resources": [{ "type": "warehouse", "id": "wh_milan" }]
         })))

@@ -135,8 +135,8 @@ match iam.verify_token(jwt).await {
 | Method | Description |
 |---|---|
 | `IamClient::builder()` | `base_url`, `token`, `timeout` (default 2s), `issuer`, `audience` → `build()` / `build_blocking()` |
-| `check(DecisionQuery) -> Result<Decision, IamError>` | `POST {base_url}/decisions:check` |
-| `list_resources(Subject, relation) -> Result<Vec<Resource>, IamError>` | `POST {base_url}/decisions:list-resources` |
+| `check(DecisionQuery) -> Result<Decision, IamError>` | `POST {base_url}/decisions/check` |
+| `list_resources(Subject, relation) -> Result<Vec<Resource>, IamError>` | `POST {base_url}/decisions/list-resources` |
 | `verify_token(jwt) -> Result<Claims, IamError>` | ES256 + `iss`/`aud`/`exp` against the cached JWKS |
 | `Decision::granted()` / `is_allowed()` | allowed **and** no pending step-up |
 | `Result::is_allowed()` (via `ResultExt`) | the fail-closed gate: any error ⇒ `false` |
@@ -151,7 +151,7 @@ All variants of `IamError` (`Network`, `Timeout`, `Unauthorized`, `Http`, `Malfo
 
 This client mirrors the PHP `HttpDecider` exactly:
 
-- **Endpoint:** `POST {base_url}/decisions:check`
+- **Endpoint:** `POST {base_url}/decisions/check`
 - **Headers:** `Accept: application/json`, `Authorization: Bearer <service token>`
 - **Request body:** `{ subject: {type, id}, permission, organization, application, resource,
   context, current_aal, explain }`

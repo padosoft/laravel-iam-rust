@@ -49,14 +49,16 @@ impl Jwks {
     }
 }
 
-/// Endpoint path for a decision check (mirrors the PHP `HttpDecider`: AIP-style custom method).
+/// Endpoint path for a decision check. Slash form `decisions/check` is the real server route
+/// (`routes/admin.php`, `resources/openapi.yaml`); the colon `decisions:check` form shipped in
+/// v1.0.0 never matched it and always 404'd → denied. Fixed in v1.0.1.
 pub(crate) fn check_url(base_url: &str) -> String {
-    format!("{base_url}/decisions:check")
+    format!("{base_url}/decisions/check")
 }
 
 /// Endpoint path for listing resources reachable by a subject under a relation.
 pub(crate) fn list_resources_url(base_url: &str) -> String {
-    format!("{base_url}/decisions:list-resources")
+    format!("{base_url}/decisions/list-resources")
 }
 
 /// JWKS document location.
@@ -76,7 +78,7 @@ pub(crate) fn status_error(status: u16) -> Option<IamError> {
     }
 }
 
-/// Parse a `decisions:check` response, applying fail-closed rules.
+/// Parse a `decisions/check` response, applying fail-closed rules.
 pub(crate) fn parse_decision(status: u16, body: &[u8]) -> Result<Decision, IamError> {
     if let Some(err) = status_error(status) {
         return Err(err);
@@ -86,7 +88,7 @@ pub(crate) fn parse_decision(status: u16, body: &[u8]) -> Result<Decision, IamEr
     Decision::from_value(&value)
 }
 
-/// Parse a `decisions:list-resources` response into typed resource references.
+/// Parse a `decisions/list-resources` response into typed resource references.
 ///
 /// Accepts either `{ "resources": [...] }` or a bare top-level array.
 pub(crate) fn parse_resources(status: u16, body: &[u8]) -> Result<Vec<Resource>, IamError> {

@@ -2,7 +2,7 @@
 //!
 //! These mirror, byte-for-byte, the request/response contract spoken by the canonical
 //! PHP client (`Padosoft\Iam\Client\Deciders\HttpDecider`): the request is the JSON body
-//! of `POST {base_url}/decisions:check`, and the response is parsed with the same
+//! of `POST {base_url}/decisions/check`, and the response is parsed with the same
 //! defensive, fail-closed rules as `IamDecision::fromArray`.
 
 use serde::{Deserialize, Serialize};
@@ -68,7 +68,7 @@ impl Resource {
 
 /// A policy-decision query.
 ///
-/// Serialized verbatim into the body of `POST {base_url}/decisions:check`, matching the PHP
+/// Serialized verbatim into the body of `POST {base_url}/decisions/check`, matching the PHP
 /// `DecisionRequest::toArray()` shape exactly — including the `current_aal` field and the
 /// `resource` field encoded as a plain string (not an object).
 ///
