@@ -1,0 +1,152 @@
+{
+  "title": "laravel-iam-rust",
+  "description": "Laravel IAM Rust client SDK (crate laravel-iam) — async (reqwest+tokio) + optional blocking, fail-closed, ES256/JWKS token verification in pure-Rust (p256).",
+  "url": "https://doc.laravel-iam-rust.padosoft.com",
+  "src": "docs",
+  "out": "_site",
+  "base": "/",
+
+  "favicon": "assets/favicon.svg",
+  "theme": {
+    "name": "default",
+    "defaultMode": "dark",
+    "customCss": ["assets/custom.css"]
+  },
+
+  "autoTitleFromH1": true,
+  "copyCode": true,
+  "pageNavigation": true,
+  "minify": true,
+  "markdown": { "breaks": true },
+
+  "layout": {
+    "spa": true,
+    "header": { "enabled": true },
+    "sidebar": { "collapsible": true, "defaultCollapsed": false },
+    "optionsMenu": {
+      "position": "header",
+      "components": { "search": true, "themeSwitch": true }
+    }
+  },
+
+  "navigation": [
+    {
+      "title": "Get Started",
+      "icon": "rocket",
+      "children": [
+        { "title": "Introduction", "path": "/" },
+        { "title": "Quickstart", "path": "/quickstart" },
+        { "title": "Installation", "path": "/installation" },
+        { "title": "Core concepts", "path": "/core-concepts" }
+      ]
+    },
+    {
+      "title": "Guides",
+      "icon": "book-open",
+      "children": [
+        { "title": "Checking decisions", "path": "/guides/checking-decisions" },
+        { "title": "Verifying tokens", "path": "/guides/verifying-tokens" },
+        { "title": "Listing resources (ReBAC)", "path": "/guides/listing-resources" },
+        { "title": "The blocking client", "path": "/guides/blocking-client" },
+        { "title": "Fail-closed patterns", "path": "/guides/fail-closed-patterns" }
+      ]
+    },
+    {
+      "title": "Concepts & Theory",
+      "icon": "square-function",
+      "children": [
+        { "title": "Fail-closed authorization", "path": "/concepts/fail-closed" },
+        { "title": "JWT / JWKS verification", "path": "/concepts/jwt-verification" },
+        { "title": "The wire contract", "path": "/concepts/wire-contract" }
+      ]
+    },
+    {
+      "title": "Architecture",
+      "icon": "workflow",
+      "children": [
+        { "title": "Architecture overview", "path": "/architecture/overview" },
+        { "title": "The check flow", "path": "/architecture/check-flow" },
+        { "title": "Decision records (ADR)", "path": "/architecture/decisions" }
+      ]
+    },
+    {
+      "title": "Best Practices",
+      "icon": "lightbulb",
+      "children": [
+        { "title": "Integration patterns", "path": "/best-practices/integration" },
+        { "title": "Security", "path": "/best-practices/security" }
+      ]
+    },
+    {
+      "title": "Operations",
+      "icon": "settings",
+      "children": [
+        { "title": "Configuration", "path": "/operations/configuration" },
+        { "title": "Troubleshooting", "path": "/operations/troubleshooting" }
+      ]
+    },
+    {
+      "title": "Reference",
+      "icon": "book-marked",
+      "children": [
+        { "title": "API reference", "path": "/reference/api" },
+        { "title": "Error taxonomy", "path": "/reference/errors" },
+        { "title": "Types", "path": "/reference/types" }
+      ]
+    },
+    {
+      "title": "Links",
+      "children": [
+        { "title": "GitHub", "path": "https://github.com/padosoft/laravel-iam-rust", "external": true },
+        { "title": "crates.io", "path": "https://crates.io/crates/laravel-iam", "external": true },
+        { "title": "docs.rs", "path": "https://docs.rs/laravel-iam", "external": true }
+      ]
+    }
+  ],
+
+  "footer": {
+    "style": "minimal",
+    "branding": true,
+    "content": "© Lorenzo Padovani — [Padosoft](https://github.com/padosoft) · [GitHub](https://github.com/padosoft/laravel-iam-rust) · MIT",
+    "columns": [
+      {
+        "title": "Project",
+        "links": [
+          { "title": "GitHub", "path": "https://github.com/padosoft/laravel-iam-rust", "external": true },
+          { "title": "crates.io", "path": "https://crates.io/crates/laravel-iam", "external": true },
+          { "title": "docs.rs", "path": "https://docs.rs/laravel-iam", "external": true }
+        ]
+      },
+      {
+        "title": "Author",
+        "links": [
+          { "title": "Lorenzo Padovani", "path": "https://github.com/lorenzo-padovani", "external": true },
+          { "title": "Padosoft", "path": "https://github.com/padosoft", "external": true }
+        ]
+      }
+    ]
+  },
+
+  "plugins": {
+    "search": { "enabled": true, "semantic": true, "placeholder": "Search the docs…" },
+    "git": {
+      "repo": "https://github.com/padosoft/laravel-iam-rust",
+      "branch": "main",
+      "editLink": true,
+      "lastUpdated": true,
+      "commitHistory": true,
+      "dateFormat": "relative"
+    },
+    "seo": {
+      "defaultDescription": "Laravel IAM Rust client SDK (crate laravel-iam) — async + optional blocking, fail-closed, pure-Rust ES256/JWKS token verification.",
+      "aiBots": true,
+      "openGraph": {},
+      "twitter": { "cardType": "summary_large_image" }
+    },
+    "sitemap": { "defaultChangefreq": "weekly", "defaultPriority": 0.8 },
+    "mermaid": {},
+    "math": {},
+    "llms": { "fullContext": true },
+    "analytics": { "enabled": false }
+  }
+}

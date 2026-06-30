@@ -2,11 +2,16 @@
 
 [![tests](https://github.com/padosoft/laravel-iam-rust/actions/workflows/tests.yml/badge.svg)](https://github.com/padosoft/laravel-iam-rust/actions/workflows/tests.yml)
 [![crates.io](https://img.shields.io/crates/v/laravel-iam.svg)](https://crates.io/crates/laravel-iam)
+[![docs.rs](https://img.shields.io/docsrs/laravel-iam.svg)](https://docs.rs/laravel-iam)
 [![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
 A thin, **fail-closed** Rust client for the [Laravel IAM](https://github.com/padosoft) authorization
 server. It asks the control plane for policy decisions and verifies OIDC tokens — and it is built
 so that a gate **cannot accidentally open**.
+
+📖 **Documentation:** [doc.laravel-iam-rust.padosoft.com](https://doc.laravel-iam-rust.padosoft.com)
+· **Crate:** [crates.io/crates/laravel-iam](https://crates.io/crates/laravel-iam)
+· **API docs:** [docs.rs/laravel-iam](https://docs.rs/laravel-iam)
 
 > Same wire contract as the production PHP client (`Padosoft\Iam\Client`), different language.
 > No policy logic lives on the client: every decision belongs to the server.
@@ -158,6 +163,23 @@ This client mirrors the PHP `HttpDecider` exactly:
 - **Response:** `{ allowed, decision_id, policy_version, requires_step_up, required_aal,
   explanation }`, parsed defensively (any wrong-typed field falls back to its safe default; a
   non-object body is a deny).
+
+## Ecosystem
+
+This SDK is one client in the **Laravel IAM** suite. The server is the policy authority; the SDKs and
+clients only transport the question and the answer.
+
+| Package | Role |
+|---|---|
+| [`laravel-iam-server`](https://github.com/padosoft/laravel-iam-server) | The IAM server: identity, org, Application Registry, PDP (RBAC+ABAC+ReBAC), OAuth/OIDC, tamper-evident audit, IGA, Admin API. |
+| [`laravel-iam-contracts`](https://github.com/padosoft/laravel-iam-contracts) | Shared contracts/interfaces + DTOs. |
+| [`laravel-iam-client`](https://github.com/padosoft/laravel-iam-client) | Laravel client for consumer apps (OIDC login, JWT/JWKS verify, middleware, Gate adapter). |
+| [`laravel-iam-node`](https://github.com/padosoft/laravel-iam-node) | Node/TS SDK (`@padosoft/laravel-iam-node`), thin + fail-closed. |
+| [`laravel-iam-react-native`](https://github.com/padosoft/laravel-iam-react-native) | React Native SDK (`@padosoft/laravel-iam-react-native`). |
+| **`laravel-iam-rust`** | **This package** — Rust SDK (crate `laravel-iam`), async + blocking, fail-closed. |
+
+All SDKs and the PHP client speak the **same wire contract**. Full docs:
+[doc.laravel-iam-rust.padosoft.com](https://doc.laravel-iam-rust.padosoft.com).
 
 ## License
 

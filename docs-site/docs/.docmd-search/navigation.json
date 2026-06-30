@@ -1,0 +1,92 @@
+{
+  "tree": [
+    {
+      "title": "The check flow",
+      "path": "architecture\\check-flow.md"
+    },
+    {
+      "title": "Architecture decision records",
+      "path": "architecture\\decisions.md"
+    },
+    {
+      "title": "Architecture overview",
+      "path": "architecture\\overview.md"
+    },
+    {
+      "title": "Integration patterns",
+      "path": "best-practices\\integration.md"
+    },
+    {
+      "title": "Security",
+      "path": "best-practices\\security.md"
+    },
+    {
+      "title": "Fail-closed authorization",
+      "path": "concepts\\fail-closed.md"
+    },
+    {
+      "title": "JWT / JWKS verification",
+      "path": "concepts\\jwt-verification.md"
+    },
+    {
+      "title": "The wire contract",
+      "path": "concepts\\wire-contract.md"
+    },
+    {
+      "title": "Core concepts",
+      "path": "core-concepts.md"
+    },
+    {
+      "title": "The blocking client",
+      "path": "guides\\blocking-client.md"
+    },
+    {
+      "title": "Checking decisions",
+      "path": "guides\\checking-decisions.md"
+    },
+    {
+      "title": "Fail-closed patterns",
+      "path": "guides\\fail-closed-patterns.md"
+    },
+    {
+      "title": "Listing resources (ReBAC)",
+      "path": "guides\\listing-resources.md"
+    },
+    {
+      "title": "Verifying tokens",
+      "path": "guides\\verifying-tokens.md"
+    },
+    {
+      "title": "Index",
+      "path": "index.md"
+    },
+    {
+      "title": "Requirements",
+      "path": "installation.md"
+    },
+    {
+      "title": "Configuration",
+      "path": "operations\\configuration.md"
+    },
+    {
+      "title": "Troubleshooting",
+      "path": "operations\\troubleshooting.md"
+    },
+    {
+      "title": "Quickstart",
+      "path": "quickstart.md"
+    },
+    {
+      "title": "API reference",
+      "path": "reference\\api.md"
+    },
+    {
+      "title": "Error taxonomy",
+      "path": "reference\\errors.md"
+    },
+    {
+      "title": "Types",
+      "path": "reference\\types.md"
+    }
+  ]
+}

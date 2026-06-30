@@ -1,0 +1,122 @@
+{
+  "version": 1,
+  "model": "Xenova/all-MiniLM-L6-v2",
+  "dimensions": 384,
+  "status": "complete",
+  "totalFiles": 22,
+  "indexedFiles": 22,
+  "totalChunks": 165,
+  "batchCount": 1,
+  "files": {
+    "architecture\\check-flow.md": {
+      "mtime": 1782853813976.9712,
+      "size": 4214,
+      "batches": []
+    },
+    "architecture\\decisions.md": {
+      "mtime": 1782853860389.295,
+      "size": 6233,
+      "batches": []
+    },
+    "architecture\\overview.md": {
+      "mtime": 1782853778163.224,
+      "size": 3859,
+      "batches": []
+    },
+    "best-practices\\integration.md": {
+      "mtime": 1782853895714.806,
+      "size": 4262,
+      "batches": []
+    },
+    "best-practices\\security.md": {
+      "mtime": 1782853936460.8606,
+      "size": 3893,
+      "batches": []
+    },
+    "concepts\\fail-closed.md": {
+      "mtime": 1782853647820.6494,
+      "size": 5117,
+      "batches": []
+    },
+    "concepts\\jwt-verification.md": {
+      "mtime": 1782853692194.2234,
+      "size": 4995,
+      "batches": []
+    },
+    "concepts\\wire-contract.md": {
+      "mtime": 1782853737633.9097,
+      "size": 5095,
+      "batches": []
+    },
+    "core-concepts.md": {
+      "mtime": 1782853412538.7632,
+      "size": 4579,
+      "batches": []
+    },
+    "guides\\blocking-client.md": {
+      "mtime": 1782853570325.954,
+      "size": 3414,
+      "batches": []
+    },
+    "guides\\checking-decisions.md": {
+      "mtime": 1782853456608.2278,
+      "size": 5507,
+      "batches": []
+    },
+    "guides\\fail-closed-patterns.md": {
+      "mtime": 1782853604664.7566,
+      "size": 4406,
+      "batches": []
+    },
+    "guides\\listing-resources.md": {
+      "mtime": 1782853533124.8218,
+      "size": 3696,
+      "batches": []
+    },
+    "guides\\verifying-tokens.md": {
+      "mtime": 1782853498668.3384,
+      "size": 4314,
+      "batches": []
+    },
+    "index.md": {
+      "mtime": 1782853281321.749,
+      "size": 5746,
+      "batches": []
+    },
+    "installation.md": {
+      "mtime": 1782853355860.3513,
+      "size": 3348,
+      "batches": []
+    },
+    "operations\\configuration.md": {
+      "mtime": 1782853965085.5225,
+      "size": 3579,
+      "batches": []
+    },
+    "operations\\troubleshooting.md": {
+      "mtime": 1782854007004.9329,
+      "size": 4319,
+      "batches": []
+    },
+    "quickstart.md": {
+      "mtime": 1782853320055.5806,
+      "size": 4117,
+      "batches": []
+    },
+    "reference\\api.md": {
+      "mtime": 1782854047362.2373,
+      "size": 4062,
+      "batches": []
+    },
+    "reference\\errors.md": {
+      "mtime": 1782854083553.0913,
+      "size": 4241,
+      "batches": []
+    },
+    "reference\\types.md": {
+      "mtime": 1782854116188.245,
+      "size": 4889,
+      "batches": []
+    }
+  }
+}
