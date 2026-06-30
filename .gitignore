@@ -1,0 +1,10 @@
+/target
+
+# A library: do not commit the lockfile.
+Cargo.lock
+
+# rustfmt backups
+**/*.rs.bk
+
+# Local-only MSVC build helper (machine-specific paths).
+/cargo-msvc.bat

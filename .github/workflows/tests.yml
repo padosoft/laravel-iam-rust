@@ -1,0 +1,50 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: ${{ matrix.rust }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        rust: [stable, beta]
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install OpenSSL development files (native-tls)
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
+
+      - name: Install Rust (${{ matrix.rust }})
+        uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ matrix.rust }}
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Check formatting
+        run: cargo fmt --all --check
+
+      # Pedantic + deny-warnings is enforced on stable. Beta runs clippy too, but does not
+      # fail the build on newly-introduced beta lints (lint churn is not a code defect).
+      - name: Clippy (deny warnings)
+        if: matrix.rust == 'stable'
+        run: cargo clippy --all-features --all-targets -- -D warnings
+
+      - name: Clippy (beta, advisory)
+        if: matrix.rust == 'beta'
+        run: cargo clippy --all-features --all-targets
+
+      - name: Test (default features)
+        run: cargo test
+
+      - name: Test (all features)
+        run: cargo test --all-features
