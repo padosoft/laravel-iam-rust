@@ -1,0 +1,25 @@
+name: release
+
+on:
+  push:
+    tags: ['v*']
+  # Lets the maintainer publish the current Cargo.toml version manually
+  # (e.g. v1.0.0, whose tag was created before this workflow existed).
+  workflow_dispatch:
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # native-tls links system OpenSSL on Linux; the publish verify-build needs its headers.
+      - name: Install OpenSSL development files
+        run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: cargo publish
+        run: cargo publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
