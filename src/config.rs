@@ -12,8 +12,14 @@ pub(crate) const DEFAULT_TIMEOUT: Duration = Duration::from_secs(2);
 pub(crate) struct Config {
     /// Base URL with any trailing slash removed.
     pub base_url: String,
-    /// Optional service token (Client Credentials), sent as `Authorization: Bearer`.
+    /// Optional STATIC service token, sent as `Authorization: Bearer`.
     pub token: Option<String>,
+    /// Self-managed `client_credentials`: when both are set, the client mints/refreshes the token itself
+    /// and auto-follows IAM's client-secret rotation (self-fetch). Takes precedence over `token`.
+    pub client_id: Option<String>,
+    pub client_secret: Option<String>,
+    /// OAuth base for token + self-fetch (e.g. `https://iam.example.com/oauth`); derived if unset.
+    pub oauth_url: Option<String>,
     pub timeout: Duration,
     /// Expected token issuer, required by `verify_token`.
     pub issuer: Option<String>,
@@ -30,6 +36,9 @@ pub(crate) struct Config {
 pub struct IamClientBuilder {
     base_url: Option<String>,
     token: Option<String>,
+    client_id: Option<String>,
+    client_secret: Option<String>,
+    oauth_url: Option<String>,
     timeout: Option<Duration>,
     issuer: Option<String>,
     audience: Option<String>,
@@ -47,6 +56,29 @@ impl IamClientBuilder {
     #[must_use]
     pub fn token(mut self, token: impl Into<String>) -> Self {
         self.token = Some(token.into());
+        self
+    }
+
+    /// Self-managed `client_credentials`: the OAuth client id (e.g. `cli_myapp`). Pair with
+    /// [`client_secret`](Self::client_secret). Takes precedence over a static [`token`](Self::token).
+    #[must_use]
+    pub fn client_id(mut self, client_id: impl Into<String>) -> Self {
+        self.client_id = Some(client_id.into());
+        self
+    }
+
+    /// The OAuth client secret issued by IAM. Rotatable — the client follows rotations automatically.
+    #[must_use]
+    pub fn client_secret(mut self, client_secret: impl Into<String>) -> Self {
+        self.client_secret = Some(client_secret.into());
+        self
+    }
+
+    /// OAuth base for the token + self-fetch endpoints, e.g. `https://iam.example.com/oauth`.
+    /// If unset, it is derived from `base_url` by stripping a trailing `/api/iam/vN`.
+    #[must_use]
+    pub fn oauth_url(mut self, oauth_url: impl Into<String>) -> Self {
+        self.oauth_url = Some(oauth_url.into());
         self
     }
 
@@ -85,9 +117,32 @@ impl IamClientBuilder {
         Ok(Config {
             base_url,
             token: self.token,
+            client_id: self.client_id,
+            client_secret: self.client_secret,
+            oauth_url: self.oauth_url,
             timeout: self.timeout.unwrap_or(DEFAULT_TIMEOUT),
             issuer: self.issuer,
             audience: self.audience,
         })
+    }
+}
+
+impl Config {
+    /// True when self-managed `client_credentials` is configured (both id + secret present).
+    pub(crate) fn uses_client_credentials(&self) -> bool {
+        self.client_id.is_some() && self.client_secret.is_some()
+    }
+
+    /// OAuth base URL: explicit `oauth_url`, else derived from `base_url` (strip trailing `/api/iam/vN`).
+    pub(crate) fn oauth_base(&self) -> String {
+        if let Some(url) = &self.oauth_url {
+            return url.trim_end_matches('/').to_string();
+        }
+        let trimmed = self.base_url.trim_end_matches('/');
+        let root = match trimmed.rfind("/api/iam/v") {
+            Some(idx) => &trimmed[..idx],
+            None => trimmed,
+        };
+        format!("{}/oauth", root.trim_end_matches('/'))
     }
 }

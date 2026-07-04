@@ -66,6 +66,44 @@ pub(crate) fn jwks_url(base_url: &str) -> String {
     format!("{base_url}/.well-known/jwks.json")
 }
 
+/// OAuth token endpoint (`client_credentials`). `oauth_base` e.g. `https://iam.example.com/oauth`.
+pub(crate) fn token_url(oauth_base: &str) -> String {
+    format!("{oauth_base}/token")
+}
+
+/// Self-fetch endpoint for an auto-rotated client secret.
+pub(crate) fn client_secret_url(oauth_base: &str) -> String {
+    format!("{oauth_base}/client-secret")
+}
+
+/// Parse an OAuth token response → `(access_token, expires_in_seconds)`; `None` if absent/malformed.
+pub(crate) fn parse_token(body: &[u8]) -> Option<(String, u64)> {
+    let value: Value = serde_json::from_slice(body).ok()?;
+    let token = value.get("access_token")?.as_str()?.to_string();
+    if token.is_empty() {
+        return None;
+    }
+    let expires_in = value
+        .get("expires_in")
+        .and_then(Value::as_u64)
+        .unwrap_or(900);
+    Some((token, expires_in))
+}
+
+/// Parse a self-fetch response → the rotated `client_secret` if `rotated == true`; `None` otherwise.
+pub(crate) fn parse_rotated_secret(body: &[u8]) -> Option<String> {
+    let value: Value = serde_json::from_slice(body).ok()?;
+    if value.get("rotated").and_then(Value::as_bool) != Some(true) {
+        return None;
+    }
+    let secret = value.get("client_secret")?.as_str()?.to_string();
+    if secret.is_empty() {
+        None
+    } else {
+        Some(secret)
+    }
+}
+
 /// Map an HTTP status to an error, or `None` for any 2xx.
 ///
 /// Mirrors the PHP client, which denies on every non-2xx; 401/403 are surfaced as

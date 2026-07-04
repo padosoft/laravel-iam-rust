@@ -4,6 +4,7 @@
 //! `reqwest::blocking`. Do not call it from inside an async runtime thread.
 
 use std::sync::{Arc, RwLock};
+use std::time::{Duration, Instant};
 
 use reqwest::header::{ACCEPT, AUTHORIZATION};
 use serde_json::json;
@@ -20,6 +21,8 @@ pub struct IamClient {
     http: reqwest::blocking::Client,
     config: Arc<Config>,
     jwks_cache: Arc<RwLock<Option<Jwks>>>,
+    token_cache: Arc<RwLock<Option<(String, Instant)>>>,
+    rotated_secret: Arc<RwLock<Option<String>>>,
 }
 
 impl IamClient {
@@ -38,6 +41,8 @@ impl IamClient {
             http,
             config: Arc::new(config),
             jwks_cache: Arc::new(RwLock::new(None)),
+            token_cache: Arc::new(RwLock::new(None)),
+            rotated_secret: Arc::new(RwLock::new(None)),
         })
     }
 
@@ -120,13 +125,94 @@ impl IamClient {
         body: &T,
     ) -> Result<(u16, Vec<u8>), IamError> {
         let mut request = self.http.post(url).header(ACCEPT, "application/json");
-        if let Some(token) = &self.config.token {
+        if let Some(token) = self.resolve_token() {
             request = request.header(AUTHORIZATION, format!("Bearer {token}"));
         }
         let response = request.json(body).send().map_err(map_reqwest_error)?;
         let status = response.status().as_u16();
         let bytes = response.bytes().map_err(map_reqwest_error)?;
         Ok((status, bytes.to_vec()))
+    }
+
+    /// Resolve the Bearer: static token, or self-managed `client_credentials` (mint + cache + auto-follow
+    /// secret rotation via self-fetch). `None` → no header → fail-closed deny. Mirrors the async client.
+    fn resolve_token(&self) -> Option<String> {
+        if !self.config.uses_client_credentials() {
+            return self.config.token.clone();
+        }
+        let client_id = self.config.client_id.as_deref()?;
+        if let Ok(guard) = self.token_cache.read() {
+            if let Some((token, expiry)) = guard.as_ref() {
+                if Instant::now() < *expiry {
+                    return Some(token.clone());
+                }
+            }
+        }
+        let oauth = self.config.oauth_base();
+        if let Some(token) = self.mint_token(client_id, &oauth) {
+            return Some(token);
+        }
+        if self.fetch_rotated_secret(client_id, &oauth) {
+            return self.mint_token(client_id, &oauth);
+        }
+        None
+    }
+
+    fn mint_token(&self, client_id: &str, oauth: &str) -> Option<String> {
+        let secret = self.current_secret();
+        let response = self
+            .http
+            .post(wire::token_url(oauth))
+            .header(ACCEPT, "application/json")
+            .basic_auth(client_id, Some(secret))
+            .form(&[("grant_type", "client_credentials")])
+            .send()
+            .ok()?;
+        if response.status().as_u16() != 200 {
+            return None;
+        }
+        let body = response.bytes().ok()?;
+        let (token, expires_in) = wire::parse_token(&body)?;
+        let expiry = Instant::now() + Duration::from_secs(expires_in.saturating_sub(30).max(1));
+        if let Ok(mut guard) = self.token_cache.write() {
+            *guard = Some((token.clone(), expiry));
+        }
+        Some(token)
+    }
+
+    fn fetch_rotated_secret(&self, client_id: &str, oauth: &str) -> bool {
+        let secret = self.current_secret();
+        let Ok(response) = self
+            .http
+            .post(wire::client_secret_url(oauth))
+            .header(ACCEPT, "application/json")
+            .basic_auth(client_id, Some(secret))
+            .send()
+        else {
+            return false;
+        };
+        if response.status().as_u16() != 200 {
+            return false;
+        }
+        let Ok(body) = response.bytes() else {
+            return false;
+        };
+        if let Some(new_secret) = wire::parse_rotated_secret(&body) {
+            if let Ok(mut guard) = self.rotated_secret.write() {
+                *guard = Some(new_secret);
+            }
+            return true;
+        }
+        false
+    }
+
+    fn current_secret(&self) -> String {
+        if let Ok(guard) = self.rotated_secret.read() {
+            if let Some(secret) = guard.as_ref() {
+                return secret.clone();
+            }
+        }
+        self.config.client_secret.clone().unwrap_or_default()
     }
 }
 

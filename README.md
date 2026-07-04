@@ -139,7 +139,30 @@ match iam.verify_token(jwt).await {
 
 | Method | Description |
 |---|---|
-| `IamClient::builder()` | `base_url`, `token`, `timeout` (default 2s), `issuer`, `audience` → `build()` / `build_blocking()` |
+| `IamClient::builder()` | `base_url`, `token` **or** `client_id`+`client_secret` (+`oauth_url`), `timeout` (default 2s), `issuer`, `audience` → `build()` / `build_blocking()` |
+
+### Authentication: static token or self-managed `client_credentials`
+
+Authenticate to the PDP in one of two ways:
+
+- **Static token** (`.token(...)`, above): a service bearer obtained out of band.
+- **Self-managed `client_credentials`** (recommended for long-lived services): pass `.client_id(...)`
+  and `.client_secret(...)`. The client mints and refreshes its own access token, and when IAM
+  **auto-rotates** the secret it **self-fetches** the new one (during the grace) and hot-swaps it — the
+  service never breaks on a rotation and no secret is handled by hand. Takes precedence over `token`.
+
+```rust
+let iam = IamClient::builder()
+    .base_url("https://iam.example.com/api/iam/v1")
+    .client_id("cli_warehouse")
+    .client_secret(std::env::var("IAM_CLIENT_SECRET")?) // rotatable; followed automatically
+    // .oauth_url("https://iam.example.com/oauth")       // optional; derived from base_url if omitted
+    .build()?;
+```
+
+Enable the self-fetch endpoint server-side with `IAM_OAUTH_CLIENT_SELFFETCH=true`. Both the async and
+`blocking` clients support it. See
+[Application credentials & lifecycle](https://doc.laravel-iam-server.padosoft.com/guides/application-credentials).
 | `check(DecisionQuery) -> Result<Decision, IamError>` | `POST {base_url}/decisions/check` |
 | `list_resources(Subject, relation) -> Result<Vec<Resource>, IamError>` | `POST {base_url}/decisions/list-resources` |
 | `verify_token(jwt) -> Result<Claims, IamError>` | ES256 + `iss`/`aud`/`exp` against the cached JWKS |
