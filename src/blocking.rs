@@ -4,7 +4,7 @@
 //! `reqwest::blocking`. Do not call it from inside an async runtime thread.
 
 use std::sync::{Arc, RwLock};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use reqwest::header::{ACCEPT, AUTHORIZATION};
 use serde_json::json;
@@ -137,6 +137,17 @@ impl IamClient {
     /// Resolve the Bearer: static token, or self-managed `client_credentials` (mint + cache + auto-follow
     /// secret rotation via self-fetch). `None` → no header → fail-closed deny. Mirrors the async client.
     fn resolve_token(&self) -> Option<String> {
+        // private_key_jwt (RFC 7523): sign a fresh assertion and exchange it — no shared secret. Cached.
+        if self.config.uses_private_key_jwt() {
+            if let Ok(guard) = self.token_cache.read() {
+                if let Some((token, expiry)) = guard.as_ref() {
+                    if Instant::now() < *expiry {
+                        return Some(token.clone());
+                    }
+                }
+            }
+            return self.mint_with_assertion();
+        }
         if !self.config.uses_client_credentials() {
             return self.config.token.clone();
         }
@@ -213,6 +224,50 @@ impl IamClient {
             }
         }
         self.config.client_secret.clone().unwrap_or_default()
+    }
+
+    fn mint_with_assertion(&self) -> Option<String> {
+        let assertion = self.build_assertion()?;
+        let response = self
+            .http
+            .post(wire::token_url(&self.config.oauth_base()))
+            .header(ACCEPT, "application/json")
+            .form(&[
+                ("grant_type", "client_credentials"),
+                (
+                    "client_assertion_type",
+                    "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+                ),
+                ("client_assertion", assertion.as_str()),
+            ])
+            .send()
+            .ok()?;
+        if response.status().as_u16() != 200 {
+            return None;
+        }
+        let body = response.bytes().ok()?;
+        let (token, expires_in) = wire::parse_token(&body)?;
+        let expiry = Instant::now() + Duration::from_secs(expires_in.saturating_sub(30).max(1));
+        if let Ok(mut guard) = self.token_cache.write() {
+            *guard = Some((token.clone(), expiry));
+        }
+        Some(token)
+    }
+
+    fn build_assertion(&self) -> Option<String> {
+        let client_id = self.config.client_id.as_deref()?;
+        let private_key = self.config.private_key.as_deref()?;
+        let aud = format!("{}/token", self.config.oauth_base().trim_end_matches('/'));
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).ok()?.as_secs();
+        wire::build_client_assertion(
+            private_key,
+            client_id,
+            &aud,
+            self.config.private_key_kid.as_deref(),
+            60,
+            now,
+            &crate::client::next_jti(),
+        )
     }
 }
 

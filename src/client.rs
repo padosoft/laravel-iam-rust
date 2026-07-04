@@ -1,7 +1,8 @@
 //! Asynchronous IAM client (built on `reqwest` + `tokio`).
 
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Arc;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use reqwest::header::{ACCEPT, AUTHORIZATION};
 use serde_json::json;
@@ -153,6 +154,15 @@ impl IamClient {
     /// Resolve the Bearer: the static token, or a self-managed `client_credentials` token that mints,
     /// caches and auto-follows secret rotation (self-fetch). `None` → no header → fail-closed deny.
     async fn resolve_token(&self) -> Option<String> {
+        // private_key_jwt (RFC 7523): sign a fresh assertion and exchange it — no shared secret. Cached.
+        if self.config.uses_private_key_jwt() {
+            if let Some((token, expiry)) = self.token_cache.read().await.as_ref() {
+                if Instant::now() < *expiry {
+                    return Some(token.clone());
+                }
+            }
+            return self.mint_with_assertion().await;
+        }
         if !self.config.uses_client_credentials() {
             return self.config.token.clone();
         }
@@ -225,6 +235,59 @@ impl IamClient {
         }
         self.config.client_secret.clone().unwrap_or_default()
     }
+
+    async fn mint_with_assertion(&self) -> Option<String> {
+        let assertion = self.build_assertion()?;
+        let response = self
+            .http
+            .post(wire::token_url(&self.config.oauth_base()))
+            .header(ACCEPT, "application/json")
+            .form(&[
+                ("grant_type", "client_credentials"),
+                (
+                    "client_assertion_type",
+                    "urn:ietf:params:oauth:client-assertion-type:jwt-bearer",
+                ),
+                ("client_assertion", assertion.as_str()),
+            ])
+            .send()
+            .await
+            .ok()?;
+        if response.status().as_u16() != 200 {
+            return None;
+        }
+        let body = response.bytes().await.ok()?;
+        let (token, expires_in) = wire::parse_token(&body)?;
+        let expiry = Instant::now() + Duration::from_secs(expires_in.saturating_sub(30).max(1));
+        *self.token_cache.write().await = Some((token.clone(), expiry));
+        Some(token)
+    }
+
+    fn build_assertion(&self) -> Option<String> {
+        let client_id = self.config.client_id.as_deref()?;
+        let private_key = self.config.private_key.as_deref()?;
+        let aud = format!("{}/token", self.config.oauth_base().trim_end_matches('/'));
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).ok()?.as_secs();
+        wire::build_client_assertion(
+            private_key,
+            client_id,
+            &aud,
+            self.config.private_key_kid.as_deref(),
+            60,
+            now,
+            &next_jti(),
+        )
+    }
+}
+
+/// A per-process-unique jti for a `private_key_jwt` assertion (nanos + a monotonic counter). The server also
+/// enforces single-use per jti, so this only needs to avoid local collisions within an assertion's lifetime.
+pub(crate) fn next_jti() -> String {
+    static COUNTER: AtomicU64 = AtomicU64::new(0);
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |d| d.as_nanos());
+    format!("{nanos}-{}", COUNTER.fetch_add(1, Ordering::Relaxed))
 }
 
 impl IamClientBuilder {

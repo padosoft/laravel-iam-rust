@@ -18,6 +18,10 @@ pub(crate) struct Config {
     /// and auto-follows IAM's client-secret rotation (self-fetch). Takes precedence over `token`.
     pub client_id: Option<String>,
     pub client_secret: Option<String>,
+    /// `private_key_jwt` (RFC 7523): an ES256 private key (PKCS#8 PEM). With `client_id` set, the client
+    /// signs a short-lived assertion instead of sending a secret. Highest precedence.
+    pub private_key: Option<String>,
+    pub private_key_kid: Option<String>,
     /// OAuth base for token + self-fetch (e.g. `https://iam.example.com/oauth`); derived if unset.
     pub oauth_url: Option<String>,
     pub timeout: Duration,
@@ -38,6 +42,8 @@ pub struct IamClientBuilder {
     token: Option<String>,
     client_id: Option<String>,
     client_secret: Option<String>,
+    private_key: Option<String>,
+    private_key_kid: Option<String>,
     oauth_url: Option<String>,
     timeout: Option<Duration>,
     issuer: Option<String>,
@@ -71,6 +77,21 @@ impl IamClientBuilder {
     #[must_use]
     pub fn client_secret(mut self, client_secret: impl Into<String>) -> Self {
         self.client_secret = Some(client_secret.into());
+        self
+    }
+
+    /// `private_key_jwt` (RFC 7523): the ES256 private key (PKCS#8 PEM). With `client_id`, the client signs an
+    /// assertion instead of sending a secret. Highest precedence. Register the matching public key in IAM.
+    #[must_use]
+    pub fn private_key(mut self, private_key_pem: impl Into<String>) -> Self {
+        self.private_key = Some(private_key_pem.into());
+        self
+    }
+
+    /// The `kid` of the registered public key, written into the assertion header.
+    #[must_use]
+    pub fn private_key_kid(mut self, kid: impl Into<String>) -> Self {
+        self.private_key_kid = Some(kid.into());
         self
     }
 
@@ -119,6 +140,8 @@ impl IamClientBuilder {
             token: self.token,
             client_id: self.client_id,
             client_secret: self.client_secret,
+            private_key: self.private_key,
+            private_key_kid: self.private_key_kid,
             oauth_url: self.oauth_url,
             timeout: self.timeout.unwrap_or(DEFAULT_TIMEOUT),
             issuer: self.issuer,
@@ -128,6 +151,11 @@ impl IamClientBuilder {
 }
 
 impl Config {
+    /// True when `private_key_jwt` is configured (`client_id` + a private key present). Highest precedence.
+    pub(crate) fn uses_private_key_jwt(&self) -> bool {
+        self.client_id.is_some() && self.private_key.is_some()
+    }
+
     /// True when self-managed `client_credentials` is configured (both id + secret present).
     pub(crate) fn uses_client_credentials(&self) -> bool {
         self.client_id.is_some() && self.client_secret.is_some()

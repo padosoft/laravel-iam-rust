@@ -141,11 +141,27 @@ match iam.verify_token(jwt).await {
 |---|---|
 | `IamClient::builder()` | `base_url`, `token` **or** `client_id`+`client_secret` (+`oauth_url`), `timeout` (default 2s), `issuer`, `audience` → `build()` / `build_blocking()` |
 
-### Authentication: static token or self-managed `client_credentials`
+### Authentication: static token, `client_credentials`, or `private_key_jwt`
 
-Authenticate to the PDP in one of two ways:
+Authenticate to the PDP in one of three ways (highest precedence first):
 
-- **Static token** (`.token(...)`, above): a service bearer obtained out of band.
+- **`private_key_jwt` — asymmetric, no shared secret (strongest)**: pass `.client_id(...)` and
+  `.private_key(pem)` (an ES256 PKCS#8 PEM, `.private_key_kid(...)` optional). The client signs a short-lived
+  assertion per token request instead of sending a secret. Register the matching **public** key (JWKS) in
+  IAM. Both the async and `blocking` clients support it.
+
+  ```rust
+  let iam = IamClient::builder()
+      .base_url("https://iam.example.com/api/iam/v1")
+      .client_id("cli_warehouse")
+      .private_key(std::fs::read_to_string("iam-client.pem")?) // ES256 PKCS#8 PEM
+      .private_key_kid("k1")
+      .build()?;
+  ```
+
+  Full guide: [private_key_jwt](https://doc.laravel-iam-server.padosoft.com/guides/private-key-jwt).
+
+- **Static token** (`.token(...)`): a service bearer obtained out of band.
 - **Self-managed `client_credentials`** (recommended for long-lived services): pass `.client_id(...)`
   and `.client_secret(...)`. The client mints and refreshes its own access token, and when IAM
   **auto-rotates** the secret it **self-fetches** the new one (during the grace) and hot-swaps it — the
