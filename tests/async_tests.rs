@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use laravel_iam::{DecisionQuery, IamClient, IamError, ResultExt, Subject};
 use serde_json::json;
-use wiremock::matchers::{body_json, header, method, path};
+use wiremock::matchers::{body_json, body_string_contains, header, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 fn client(server: &MockServer) -> IamClient {
@@ -462,5 +462,44 @@ async fn client_credentials_self_fetches_rotated_secret_and_retries() {
     assert!(
         decision.allowed,
         "rollover must be transparent: fetch new secret, retry, authorize"
+    );
+}
+
+#[tokio::test]
+async fn private_key_jwt_signs_an_assertion_and_authorizes_decision() {
+    let server = MockServer::start().await;
+    // Token endpoint accepts the request only when it carries a private_key_jwt assertion (no secret).
+    Mock::given(method("POST"))
+        .and(path("/oauth/token"))
+        .and(body_string_contains("client_assertion_type"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(json!({ "access_token": "AT-PK", "expires_in": 900 })),
+        )
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/decisions/check"))
+        .and(header("authorization", "Bearer AT-PK"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "allowed": true, "decision_id": "dec_pk", "policy_version": 1, "requires_step_up": false
+        })))
+        .mount(&server)
+        .await;
+
+    let iam = IamClient::builder()
+        .base_url(server.uri())
+        .client_id("cli_pk")
+        .private_key(include_str!("fixtures/es256-private.pem")) // the SDK signs with this
+        .private_key_kid("test-key-1")
+        .oauth_url(format!("{}/oauth", server.uri()))
+        .timeout(Duration::from_millis(500))
+        .build()
+        .expect("client builds");
+
+    let decision = iam.check(sample_query()).await.expect("ok");
+    assert!(
+        decision.allowed,
+        "a signed private_key_jwt assertion must authorize the decision"
     );
 }

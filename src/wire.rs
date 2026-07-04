@@ -13,8 +13,9 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
-use p256::ecdsa::signature::Verifier;
-use p256::ecdsa::{Signature, VerifyingKey};
+use p256::ecdsa::signature::{Signer, Verifier};
+use p256::ecdsa::{Signature, SigningKey, VerifyingKey};
+use p256::pkcs8::DecodePrivateKey;
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -74,6 +75,40 @@ pub(crate) fn token_url(oauth_base: &str) -> String {
 /// Self-fetch endpoint for an auto-rotated client secret.
 pub(crate) fn client_secret_url(oauth_base: &str) -> String {
     format!("{oauth_base}/client-secret")
+}
+
+/// Build and ES256-sign a `private_key_jwt` client assertion (RFC 7523) from a PKCS#8 PEM private key.
+///
+/// Claims: `iss` = `sub` = `client_id`, `aud` = the token endpoint, plus `jti` / `iat` / `exp`. Returns the
+/// compact JWT, or `None` if the key cannot be parsed. `now`/`jti` are passed in so the caller controls the
+/// clock and uniqueness (keeps this function pure and testable).
+pub(crate) fn build_client_assertion(
+    private_key_pem: &str,
+    client_id: &str,
+    aud: &str,
+    kid: Option<&str>,
+    ttl_secs: u64,
+    now: u64,
+    jti: &str,
+) -> Option<String> {
+    let signing_key = SigningKey::from_pkcs8_pem(private_key_pem).ok()?;
+    let header = match kid {
+        Some(k) => serde_json::json!({ "alg": "ES256", "typ": "JWT", "kid": k }),
+        None => serde_json::json!({ "alg": "ES256", "typ": "JWT" }),
+    };
+    let payload = serde_json::json!({
+        "iss": client_id, "sub": client_id, "aud": aud,
+        "jti": jti, "iat": now, "exp": now + ttl_secs,
+    });
+
+    let encode = |v: &Value| URL_SAFE_NO_PAD.encode(serde_json::to_vec(v).unwrap_or_default());
+    let signing_input = format!("{}.{}", encode(&header), encode(&payload));
+    let signature: Signature = signing_key.sign(signing_input.as_bytes());
+
+    Some(format!(
+        "{signing_input}.{}",
+        URL_SAFE_NO_PAD.encode(signature.to_bytes())
+    ))
 }
 
 /// Parse an OAuth token response → `(access_token, expires_in_seconds)`; `None` if absent/malformed.
