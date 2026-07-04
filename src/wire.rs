@@ -83,7 +83,10 @@ pub(crate) fn parse_token(body: &[u8]) -> Option<(String, u64)> {
     if token.is_empty() {
         return None;
     }
-    let expires_in = value.get("expires_in").and_then(Value::as_u64).unwrap_or(900);
+    let expires_in = value
+        .get("expires_in")
+        .and_then(Value::as_u64)
+        .unwrap_or(900);
     Some((token, expires_in))
 }
 

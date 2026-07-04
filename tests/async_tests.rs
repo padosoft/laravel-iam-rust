@@ -380,7 +380,8 @@ async fn client_credentials_mints_token_and_authorizes_decision() {
     Mock::given(method("POST"))
         .and(path("/oauth/token"))
         .respond_with(
-            ResponseTemplate::new(200).set_body_json(json!({ "access_token": "AT1", "expires_in": 900 })),
+            ResponseTemplate::new(200)
+                .set_body_json(json!({ "access_token": "AT1", "expires_in": 900 })),
         )
         .mount(&server)
         .await;
@@ -403,7 +404,10 @@ async fn client_credentials_mints_token_and_authorizes_decision() {
         .expect("client builds");
 
     let decision = iam.check(sample_query()).await.expect("ok");
-    assert!(decision.allowed, "client_credentials token must authorize the decision");
+    assert!(
+        decision.allowed,
+        "client_credentials token must authorize the decision"
+    );
 }
 
 #[tokio::test]
@@ -421,7 +425,8 @@ async fn client_credentials_self_fetches_rotated_secret_and_retries() {
     Mock::given(method("POST"))
         .and(path("/oauth/client-secret"))
         .respond_with(
-            ResponseTemplate::new(200).set_body_json(json!({ "rotated": true, "client_secret": "NEW" })),
+            ResponseTemplate::new(200)
+                .set_body_json(json!({ "rotated": true, "client_secret": "NEW" })),
         )
         .mount(&server)
         .await;
@@ -429,7 +434,8 @@ async fn client_credentials_self_fetches_rotated_secret_and_retries() {
     Mock::given(method("POST"))
         .and(path("/oauth/token"))
         .respond_with(
-            ResponseTemplate::new(200).set_body_json(json!({ "access_token": "AT2", "expires_in": 900 })),
+            ResponseTemplate::new(200)
+                .set_body_json(json!({ "access_token": "AT2", "expires_in": 900 })),
         )
         .with_priority(5)
         .mount(&server)
@@ -453,5 +459,8 @@ async fn client_credentials_self_fetches_rotated_secret_and_retries() {
         .expect("client builds");
 
     let decision = iam.check(sample_query()).await.expect("ok");
-    assert!(decision.allowed, "rollover must be transparent: fetch new secret, retry, authorize");
+    assert!(
+        decision.allowed,
+        "rollover must be transparent: fetch new secret, retry, authorize"
+    );
 }
