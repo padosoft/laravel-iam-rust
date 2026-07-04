@@ -373,3 +373,85 @@ async fn builder_requires_base_url() {
     let result = IamClient::builder().token("t").build();
     assert!(matches!(result, Err(IamError::Config(_))));
 }
+
+#[tokio::test]
+async fn client_credentials_mints_token_and_authorizes_decision() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/oauth/token"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(json!({ "access_token": "AT1", "expires_in": 900 })),
+        )
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/decisions/check"))
+        .and(header("authorization", "Bearer AT1"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "allowed": true, "decision_id": "dec_cc", "policy_version": 1, "requires_step_up": false
+        })))
+        .mount(&server)
+        .await;
+
+    let iam = IamClient::builder()
+        .base_url(server.uri())
+        .client_id("cli")
+        .client_secret("s")
+        .oauth_url(format!("{}/oauth", server.uri()))
+        .timeout(Duration::from_millis(500))
+        .build()
+        .expect("client builds");
+
+    let decision = iam.check(sample_query()).await.expect("ok");
+    assert!(decision.allowed, "client_credentials token must authorize the decision");
+}
+
+#[tokio::test]
+async fn client_credentials_self_fetches_rotated_secret_and_retries() {
+    let server = MockServer::start().await;
+    // First token attempt fails once (secret was auto-rotated server-side).
+    Mock::given(method("POST"))
+        .and(path("/oauth/token"))
+        .respond_with(ResponseTemplate::new(401))
+        .up_to_n_times(1)
+        .with_priority(1)
+        .mount(&server)
+        .await;
+    // Self-fetch hands back the rotated secret.
+    Mock::given(method("POST"))
+        .and(path("/oauth/client-secret"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(json!({ "rotated": true, "client_secret": "NEW" })),
+        )
+        .mount(&server)
+        .await;
+    // Retry with the new secret succeeds.
+    Mock::given(method("POST"))
+        .and(path("/oauth/token"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(json!({ "access_token": "AT2", "expires_in": 900 })),
+        )
+        .with_priority(5)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/decisions/check"))
+        .and(header("authorization", "Bearer AT2"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "allowed": true, "decision_id": "dec_rot", "policy_version": 1, "requires_step_up": false
+        })))
+        .mount(&server)
+        .await;
+
+    let iam = IamClient::builder()
+        .base_url(server.uri())
+        .client_id("cli")
+        .client_secret("OLD")
+        .oauth_url(format!("{}/oauth", server.uri()))
+        .timeout(Duration::from_millis(500))
+        .build()
+        .expect("client builds");
+
+    let decision = iam.check(sample_query()).await.expect("ok");
+    assert!(decision.allowed, "rollover must be transparent: fetch new secret, retry, authorize");
+}
