@@ -67,6 +67,11 @@ pub(crate) fn jwks_url(base_url: &str) -> String {
     format!("{base_url}/.well-known/jwks.json")
 }
 
+/// Admin API endpoint to submit a manifest for an application.
+pub(crate) fn manifest_url(base_url: &str, app_key: &str) -> String {
+    format!("{base_url}/applications/{app_key}/manifests")
+}
+
 /// OAuth token endpoint (`client_credentials`). `oauth_base` e.g. `https://iam.example.com/oauth`.
 pub(crate) fn token_url(oauth_base: &str) -> String {
     format!("{oauth_base}/token")

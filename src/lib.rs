@@ -57,6 +57,7 @@
 mod client;
 mod config;
 mod error;
+pub mod manifest;
 mod types;
 mod wire;
 
@@ -66,6 +67,7 @@ pub mod blocking;
 pub use client::IamClient;
 pub use config::IamClientBuilder;
 pub use error::IamError;
+pub use manifest::{validate_manifest, ManifestValidation};
 pub use types::{Claims, Decision, DecisionQuery, Resource, Subject};
 
 /// Fail-closed extension for `Result<Decision, IamError>`.

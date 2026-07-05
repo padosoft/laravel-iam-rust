@@ -9,7 +9,7 @@ use std::time::Duration;
 
 use laravel_iam::{DecisionQuery, IamClient, IamError, ResultExt, Subject};
 use serde_json::json;
-use wiremock::matchers::{body_json, body_string_contains, header, method, path};
+use wiremock::matchers::{body_json, body_string_contains, header, header_exists, method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 fn client(server: &MockServer) -> IamClient {
@@ -502,4 +502,51 @@ async fn private_key_jwt_signs_an_assertion_and_authorizes_decision() {
         decision.allowed,
         "a signed private_key_jwt assertion must authorize the decision"
     );
+}
+
+#[tokio::test]
+async fn submit_manifest_posts_with_bearer_and_idempotency_key() {
+    let server = MockServer::start().await;
+    Mock::given(method("POST"))
+        .and(path("/applications/shop/manifests"))
+        .and(header("authorization", "Bearer service-token"))
+        .and(header_exists("idempotency-key"))
+        .and(body_json(json!({
+            "manifest": {
+                "schema": "laravel-iam.manifest.v2",
+                "app": { "key": "shop", "name": "Shop" },
+                "permissions": [{ "key": "orders.view", "risk": "low" }],
+                "roles": [{ "key": "clerk", "permissions": ["orders.view"] }]
+            }
+        })))
+        .respond_with(ResponseTemplate::new(201).set_body_json(json!({
+            "data": { "version": 4, "status": "approved" }
+        })))
+        .mount(&server)
+        .await;
+
+    let manifest = json!({
+        "schema": "laravel-iam.manifest.v2",
+        "app": { "key": "shop", "name": "Shop" },
+        "permissions": [{ "key": "orders.view", "risk": "low" }],
+        "roles": [{ "key": "clerk", "permissions": ["orders.view"] }]
+    });
+
+    let out = client(&server)
+        .submit_manifest(None, &manifest)
+        .await
+        .expect("submit ok");
+    assert_eq!(out["status"], "approved");
+    assert_eq!(out["version"], 4);
+}
+
+#[tokio::test]
+async fn submit_manifest_rejects_invalid_locally_without_network() {
+    let server = MockServer::start().await; // no mock mounted: a network call would 404
+    let manifest = json!({ "schema": "x", "app": {} });
+    let err = client(&server)
+        .submit_manifest(None, &manifest)
+        .await
+        .expect_err("invalid manifest must error locally");
+    assert!(matches!(err, IamError::Config(_)));
 }

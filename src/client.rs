@@ -5,11 +5,12 @@ use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use reqwest::header::{ACCEPT, AUTHORIZATION};
-use serde_json::json;
+use serde_json::{json, Value};
 use tokio::sync::RwLock;
 
 use crate::config::{Config, IamClientBuilder};
 use crate::error::IamError;
+use crate::manifest::validate_manifest;
 use crate::types::{Claims, Decision, DecisionQuery, Resource, Subject};
 use crate::wire::{self, Jwks};
 
@@ -93,6 +94,64 @@ impl IamClient {
             .await?;
         let (status, body) = read(response).await?;
         wire::parse_resources(status, &body)
+    }
+
+    /// Push a manifest to IAM's Admin API (`POST /applications/{app}/manifests`) — declare & sync a permission
+    /// catalog/roles for a service that owns them. Validates locally first, then submits with the bearer + an
+    /// `Idempotency-Key`. IAM diffs it: additive changes apply, a removal is gated for approval and the removed
+    /// role/permission is **deprecated** (kept for history, disabled), never deleted. `app_key` defaults to the
+    /// manifest's `app.key`. Returns the response body's `data` (or the whole body).
+    ///
+    /// # Errors
+    /// [`IamError::Config`] if there is no app key or the manifest fails local validation;
+    /// [`IamError::Http`]/[`IamError::Network`] on a non-2xx or transport failure.
+    pub async fn submit_manifest(
+        &self,
+        app_key: Option<&str>,
+        manifest: &Value,
+    ) -> Result<Value, IamError> {
+        let app = app_key
+            .map(str::to_string)
+            .or_else(|| {
+                manifest
+                    .get("app")
+                    .and_then(|a| a.get("key"))
+                    .and_then(Value::as_str)
+                    .map(str::to_string)
+            })
+            .ok_or_else(|| {
+                IamError::Config("no app key (pass app_key or set manifest.app.key)".into())
+            })?;
+
+        let validation = validate_manifest(manifest);
+        if !validation.valid {
+            return Err(IamError::Config(format!(
+                "invalid manifest: {}",
+                validation.errors.join("; ")
+            )));
+        }
+
+        let mut request = self
+            .http
+            .post(wire::manifest_url(&self.config.base_url, &app))
+            .header(ACCEPT, "application/json")
+            .header("Idempotency-Key", next_jti());
+        if let Some(token) = self.resolve_token().await {
+            request = request.header(AUTHORIZATION, format!("Bearer {token}"));
+        }
+        let response = request
+            .json(&json!({ "manifest": manifest }))
+            .send()
+            .await
+            .map_err(map_reqwest_error)?;
+
+        let (status, body) = read(response).await?;
+        if !(200..300).contains(&status) {
+            return Err(IamError::Http(status));
+        }
+        let parsed: Value =
+            serde_json::from_slice(&body).map_err(|e| IamError::Malformed(e.to_string()))?;
+        Ok(parsed.get("data").cloned().unwrap_or(parsed))
     }
 
     /// Verify an OIDC token: ES256 signature against the cached JWKS, plus `iss`/`aud`/`exp`.
