@@ -181,9 +181,28 @@ Enable the self-fetch endpoint server-side with `IAM_OAUTH_CLIENT_SELFFETCH=true
 [Application credentials & lifecycle](https://doc.laravel-iam-server.padosoft.com/guides/application-credentials).
 | `check(DecisionQuery) -> Result<Decision, IamError>` | `POST {base_url}/decisions/check` |
 | `list_resources(Subject, relation) -> Result<Vec<Resource>, IamError>` | `POST {base_url}/decisions/list-resources` |
+| `submit_manifest(Option<&str>, &Value) -> Result<Value, IamError>` | `POST {base_url}/applications/{app}/manifests` |
 | `verify_token(jwt) -> Result<Claims, IamError>` | ES256 + `iss`/`aud`/`exp` against the cached JWKS |
+| `validate_manifest(&Value) -> ManifestValidation` | local check vs `laravel-iam.manifest.v2` (no network) |
 | `Decision::granted()` / `is_allowed()` | allowed **and** no pending step-up |
 | `Result::is_allowed()` (via `ResultExt`) | the fail-closed gate: any error ⇒ `false` |
+
+### Declare & sync a manifest
+
+A service that owns a permission catalog **declares** it in a manifest (a versioned file — the source of
+truth) and pushes it to IAM. `validate_manifest` checks it locally (mirrors the server + the published schema
+at `/.well-known/iam-manifest-schema.json`); `submit_manifest` pushes it (bearer needs `iam:manifests.submit`).
+
+```rust
+let manifest: serde_json::Value = serde_json::from_str(&std::fs::read_to_string("iam.manifest.json")?)?;
+let v = laravel_iam::validate_manifest(&manifest);
+if !v.valid { return Err(format!("invalid manifest: {}", v.errors.join("; ")).into()); }
+
+// IAM diffs it: additive changes apply, a removal is gated for approval and DEPRECATED (kept, disabled).
+let result = iam.submit_manifest(None, &manifest).await?; // app.key comes from the manifest
+```
+
+See [Keeping IAM in sync](https://doc.laravel-iam-server.padosoft.com/guides/keeping-in-sync).
 
 ### Errors
 
