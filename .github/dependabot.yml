@@ -1,0 +1,33 @@
+version: 2
+
+# Only `docs-site` is configured here. Security updates for the package itself
+# (root `/`) stay on GitHub's automatic behaviour and are deliberately left
+# untouched — that path works (e.g. the postcss advisory produced a clean PR).
+updates:
+  - package-ecosystem: npm
+    directory: /docs-site
+    schedule:
+      interval: weekly
+    # `docs-site` had no version-update PRs before this file existed. 0 keeps it
+    # that way (it disables version updates only); security updates still run,
+    # and they honour the `ignore` list below.
+    open-pull-requests-limit: 0
+    ignore:
+      # sharp is patched in 0.35.0 and adm-zip in 0.6.0, but the docmd
+      # semantic-search stack pins both below that:
+      #   @docmd/core / docmd-search → @huggingface/transformers@4 → sharp ^0.34.5
+      #                              → onnxruntime-node          → adm-zip ^0.5.16
+      # No semver-valid update path exists, so every security-update run ended in
+      # "Dependabot encountered an error performing the update" (fix_available:
+      # false) and failed the Actions run — on every rescan, in all three SDK repos.
+      #
+      # Not silencing a shipped vulnerability: docs-site is `private: true`, is a
+      # build-time-only workspace, and none of it reaches the npm tarball
+      # (`files` = dist/README/LICENSE). Forcing patched versions via npm
+      # `overrides` would mean regenerating docs-site/package-lock.json, which must
+      # stay cross-platform for the Cloudflare Pages `npm ci` — not worth it here.
+      #
+      # The alerts are intentionally left open in the Security tab. Drop these
+      # entries once @huggingface/transformers / onnxruntime-node widen their ranges.
+      - dependency-name: sharp
+      - dependency-name: adm-zip
