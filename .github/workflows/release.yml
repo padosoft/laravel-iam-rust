@@ -13,6 +13,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Fail fast when a tag is pushed without bumping Cargo.toml. Without this
+      # the job installs toolchain and deps, then dies at the registry with
+      # `error: crate laravel-iam@X.Y.Z already exists on crates.io index`.
+      # Skipped on workflow_dispatch (ref_type == 'branch'), which publishes the
+      # manifest version as-is on purpose.
+      - name: Verify tag matches Cargo.toml version
+        if: github.ref_type == 'tag'
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          crate="$(sed -n '/^\[package\]/,/^\[/p' Cargo.toml | sed -nE 's/^version *= *"([^"]+)".*/\1/p' | head -1)"
+          if [ "$tag" != "$crate" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match Cargo.toml version ${crate}. Bump the version in Cargo.toml, commit it, then re-tag."
+            exit 1
+          fi
+          echo "Tag ${GITHUB_REF_NAME} matches Cargo.toml version ${crate}."
+
       # native-tls links system OpenSSL on Linux; the publish verify-build needs its headers.
       - name: Install OpenSSL development files
         run: sudo apt-get update && sudo apt-get install -y pkg-config libssl-dev
