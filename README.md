@@ -139,7 +139,9 @@ match iam.verify_token(jwt).await {
 
 | Method | Description |
 |---|---|
-| `IamClient::builder()` | `base_url`, `token` **or** `client_id`+`client_secret` (+`oauth_url`), `timeout` (default 2s), `issuer`, `audience` → `build()` / `build_blocking()` |
+| `IamClient::builder()` | `base_url`, `token` **or** `client_id`+`client_secret` (+`oauth_url`), `timeout` (default 2s), `issuer`, `audience`, `introspection_url` → `build()` / `build_blocking()` |
+| `check_delegated` / `check_delegated_with` | A decision for an **agent acting on behalf of a user** (strict intersection). |
+| `verify_delegated_token` | Verify a delegated bearer through RFC 7662 introspection. |
 
 ### Authentication: static token, `client_credentials`, or `private_key_jwt`
 
@@ -204,6 +206,42 @@ let result = iam.submit_manifest(None, &manifest).await?; // app.key comes from 
 
 See [Keeping IAM in sync](https://doc.laravel-iam-server.padosoft.com/guides/keeping-in-sync).
 
+### Delegated access (agents acting for users)
+
+When an **AI agent acts on behalf of a user**, the token carries *two* identities: `sub` is the user, `act` is the agent (nested outermost-first when the chain is longer than one hop — RFC 8693 §4.1). The verdict is the **strict intersection** of what the user may do and what *every* actor in the chain may do — never the union. Adding a hop can only narrow authority; it can never grant anything new.
+
+```rust
+use laravel_iam::{DecisionQuery, IamClient, ResultExt, Subject};
+
+# async fn run(iam: IamClient, token: &str) -> Result<(), Box<dyn std::error::Error>> {
+// Delegated tokens are introspection-mandatory: this call asks the server.
+let Some(bearer) = iam.verify_delegated_token(token).await? else {
+    return Ok(()); // not a delegated token — verify it with `verify_token` instead
+};
+
+let allowed = iam.check_delegated_with(DecisionQuery {
+    subject: Subject::user(&bearer.sub),      // the USER — never the agent
+    permission: "orders.draft".into(),
+    resource: Some("ord_1".into()),
+    actors: bearer.actors.clone(),            // current actor first
+    delegation_grant_id: bearer.grant_id.clone(),
+    ..Default::default()
+}).await.is_allowed();
+# let _ = allowed;
+# Ok(())
+# }
+```
+
+Three rules the SDK enforces for you, because getting any of them wrong turns delegation into an escalation path:
+
+- **Introspection is mandatory.** `verify_delegated_token` never builds its answer from the local bytes: it calls the server's `/oauth/introspect`, which re-checks the signature, the expiry **and that the user's session is still alive**. Unreachable introspection is a deny, not a fallback. `typ: delegated+jwt` is routing, not a defence. Configure the endpoint with `.introspection_url(…)` (defaults to `<oauth_base>/introspect`); pass `""` to refuse delegated tokens outright.
+- **A malformed `act` is refused; an absent one is not.** No `act` means "not delegated, use the normal path" (`Ok(None)`). An *unreadable* `act` is an error — silently degrading it into a full-authority user token is precisely the confused deputy delegation exists to prevent.
+- **An empty actor chain is refused**, never a fall-back to the user-only check: it means the caller lost track of who is acting.
+
+The plain-check body is unchanged — `actors` and `delegation_grant_id` are skipped when empty, so an older server that never heard of delegation is unaffected. This crate holds **no decision cache**, so a delegated verdict is always fresh by construction.
+
+Requires [`laravel-iam-agents`](https://github.com/padosoft/laravel-iam-agents) on the server. Available on both the async and `blocking` clients.
+
 ### Errors
 
 All variants of `IamError` (`Network`, `Timeout`, `Unauthorized`, `Http`, `Malformed`,
@@ -214,10 +252,13 @@ All variants of `IamError` (`Network`, `Timeout`, `Unauthorized`, `Http`, `Malfo
 
 This client mirrors the PHP `HttpDecider` exactly:
 
-- **Endpoint:** `POST {base_url}/decisions/check`
+- **Endpoint:** `POST {base_url}/decisions/check` — or `POST {base_url}/decisions/check-delegated`
+  when an act chain is present
 - **Headers:** `Accept: application/json`, `Authorization: Bearer <service token>`
 - **Request body:** `{ subject: {type, id}, permission, organization, application, resource,
-  context, current_aal, explain }`
+  context, current_aal, explain }`, plus `actors` and `delegation_grant_id` on delegated
+  queries only — a plain check's body is byte-identical to what it has always been
+- **Introspection:** `POST {oauth_base}/introspect` (form-encoded, RFC 7662), for delegated tokens
 - **Response:** `{ allowed, decision_id, policy_version, requires_step_up, required_aal,
   explanation }`, parsed defensively (any wrong-typed field falls back to its safe default; a
   non-object body is a deny).
