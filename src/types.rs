@@ -105,6 +105,18 @@ pub struct DecisionQuery {
     pub current_aal: String,
     /// Ask the server to include a human-readable explanation in the response.
     pub explain: bool,
+    /// Delegation act chain (`agent:<id>`, **current actor first**). When non-empty the
+    /// query is routed to `decisions/check-delegated` and the verdict is the strict
+    /// intersection of the subject and every actor — never the union.
+    ///
+    /// Skipped when empty, so a plain check's body stays byte-identical to what it has
+    /// always been and an older server is unaffected.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub actors: Vec<String>,
+    /// `pds_dgr` of the grant this delegation descends from, so a revoked grant is caught
+    /// inside the token's lifetime rather than at expiry.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub delegation_grant_id: Option<String>,
 }
 
 impl Default for DecisionQuery {
@@ -118,11 +130,19 @@ impl Default for DecisionQuery {
             context: Value::Object(serde_json::Map::new()),
             current_aal: "aal1".to_string(),
             explain: false,
+            actors: Vec::new(),
+            delegation_grant_id: None,
         }
     }
 }
 
 impl DecisionQuery {
+    /// True when this query carries an act chain and must go to the delegated endpoint.
+    #[must_use]
+    pub fn is_delegated(&self) -> bool {
+        !self.actors.is_empty()
+    }
+
     /// Start a query for `subject` asking about `permission`; all other fields take their defaults.
     pub fn new(subject: Subject, permission: impl Into<String>) -> Self {
         Self {

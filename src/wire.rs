@@ -19,6 +19,9 @@ use p256::pkcs8::DecodePrivateKey;
 use serde::Deserialize;
 use serde_json::Value;
 
+use crate::delegation::{
+    actor_chain_from_claims, delegated_bearer_from_claims, parse_scopes, DelegatedBearer,
+};
 use crate::error::IamError;
 use crate::types::{Claims, Decision, Resource};
 
@@ -55,6 +58,17 @@ impl Jwks {
 /// v1.0.0 never matched it and always 404'd → denied. Fixed in v1.0.1.
 pub(crate) fn check_url(base_url: &str) -> String {
     format!("{base_url}/decisions/check")
+}
+
+/// Endpoint path for a DELEGATED decision check (an agent acting on behalf of a user).
+/// Served by `laravel-iam-agents`; absent on a server without the module.
+pub(crate) fn check_delegated_url(base_url: &str) -> String {
+    format!("{base_url}/decisions/check-delegated")
+}
+
+/// RFC 7662 token-introspection endpoint. `oauth_base` e.g. `https://iam.example.com/oauth`.
+pub(crate) fn introspect_url(oauth_base: &str) -> String {
+    format!("{oauth_base}/introspect")
 }
 
 /// Endpoint path for listing resources reachable by a subject under a relation.
@@ -189,6 +203,69 @@ pub(crate) fn parse_resources(status: u16, body: &[u8]) -> Result<Vec<Resource>,
                 .map_err(|e| IamError::Malformed(e.to_string()))
         })
         .collect()
+}
+
+/// Parse an RFC 7662 introspection response into the VERIFIED authorization view.
+///
+/// The view is built from the introspected claims — the server-side truth — falling back to
+/// the local values only for fields introspection may omit. Any problem yields `None`, which
+/// the caller turns into a deny: there is no partial acceptance of a delegated token.
+pub(crate) fn parse_introspection(
+    status: u16,
+    body: &[u8],
+    local: &DelegatedBearer,
+) -> Option<DelegatedBearer> {
+    if status != 200 {
+        return None;
+    }
+    let claims: Value = serde_json::from_slice(body).ok()?;
+    if claims.get("active") != Some(&Value::Bool(true)) {
+        return None; // inactive: an expired or revoked delegation stops here
+    }
+
+    // A malformed `act` from the server is refused outright, never degraded.
+    if let Ok(Some(introspected)) = delegated_bearer_from_claims(&claims, true) {
+        return Some(DelegatedBearer {
+            grant_id: introspected.grant_id.or_else(|| local.grant_id.clone()),
+            scopes: if introspected.scopes.is_empty() {
+                local.scopes.clone()
+            } else {
+                introspected.scopes
+            },
+            ..introspected
+        });
+    }
+    if actor_chain_from_claims(&claims).is_err() {
+        return None;
+    }
+
+    // Active, but the server did not echo `act`: keep the local chain, which the
+    // signature-verified introspection has just vouched for as a whole.
+    let sub = claims
+        .get("sub")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    if sub.is_empty() {
+        return None;
+    }
+    let grant_id = claims
+        .get("pds_dgr")
+        .and_then(Value::as_str)
+        .filter(|s| !s.is_empty())
+        .map(ToString::to_string)
+        .or_else(|| local.grant_id.clone());
+    let scopes = match claims.get("scope").and_then(Value::as_str) {
+        Some(scope) if !scope.is_empty() => parse_scopes(Some(scope)),
+        _ => local.scopes.clone(),
+    };
+
+    Some(DelegatedBearer {
+        sub: sub.to_string(),
+        actors: local.actors.clone(),
+        grant_id,
+        scopes,
+        verified: true,
+    })
 }
 
 /// Parse a JWKS document.

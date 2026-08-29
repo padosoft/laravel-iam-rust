@@ -29,6 +29,9 @@ pub(crate) struct Config {
     pub issuer: Option<String>,
     /// Expected token audience, required by `verify_token`.
     pub audience: Option<String>,
+    /// RFC 7662 introspection endpoint; derived from `oauth_base()` when unset. Set it to an
+    /// empty string to refuse delegated tokens outright.
+    pub introspection_url: Option<String>,
 }
 
 /// Builder for an IAM client.
@@ -48,6 +51,7 @@ pub struct IamClientBuilder {
     timeout: Option<Duration>,
     issuer: Option<String>,
     audience: Option<String>,
+    introspection_url: Option<String>,
 }
 
 impl IamClientBuilder {
@@ -124,6 +128,17 @@ impl IamClientBuilder {
         self
     }
 
+    /// RFC 7662 introspection endpoint, e.g. `https://iam.example.com/oauth/introspect`.
+    ///
+    /// Delegated tokens are **introspection-mandatory**, so without a reachable endpoint
+    /// [`verify_delegated_token`](crate::IamClient::verify_delegated_token) always denies.
+    /// Defaults to `<oauth_base>/introspect`; pass `""` to refuse delegated tokens outright.
+    #[must_use]
+    pub fn introspection_url(mut self, url: impl Into<String>) -> Self {
+        self.introspection_url = Some(url.into());
+        self
+    }
+
     /// Validate the builder and produce an immutable [`Config`].
     ///
     /// # Errors
@@ -146,6 +161,7 @@ impl IamClientBuilder {
             timeout: self.timeout.unwrap_or(DEFAULT_TIMEOUT),
             issuer: self.issuer,
             audience: self.audience,
+            introspection_url: self.introspection_url,
         })
     }
 }
@@ -159,6 +175,15 @@ impl Config {
     /// True when self-managed `client_credentials` is configured (both id + secret present).
     pub(crate) fn uses_client_credentials(&self) -> bool {
         self.client_id.is_some() && self.client_secret.is_some()
+    }
+
+    /// Introspection endpoint: explicit `introspection_url`, else `<oauth_base>/introspect`.
+    /// An empty string means "refuse delegated tokens", and is returned verbatim.
+    pub(crate) fn introspection_endpoint(&self) -> String {
+        match &self.introspection_url {
+            Some(url) => url.trim_end_matches('/').to_string(),
+            None => crate::wire::introspect_url(&self.oauth_base()),
+        }
     }
 
     /// OAuth base URL: explicit `oauth_url`, else derived from `base_url` (strip trailing `/api/iam/vN`).

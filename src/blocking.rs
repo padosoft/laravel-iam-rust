@@ -9,8 +9,9 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use reqwest::header::{ACCEPT, AUTHORIZATION};
 use serde_json::json;
 
-use crate::client::map_reqwest_error;
+use crate::client::{map_reqwest_error, require_actors};
 use crate::config::{Config, IamClientBuilder};
+use crate::delegation::{inspect_delegated_bearer, DelegatedBearer};
 use crate::error::IamError;
 use crate::types::{Claims, Decision, DecisionQuery, Resource, Subject};
 use crate::wire::{self, Jwks};
@@ -52,8 +53,79 @@ impl IamClient {
     /// See [`IamError`].
     #[allow(clippy::needless_pass_by_value)] // mirrors the async client's owned-query API
     pub fn check(&self, query: DecisionQuery) -> Result<Decision, IamError> {
-        let (status, body) = self.send_json(&wire::check_url(&self.config.base_url), &query)?;
+        let url = if query.is_delegated() {
+            wire::check_delegated_url(&self.config.base_url)
+        } else {
+            wire::check_url(&self.config.base_url)
+        };
+        let (status, body) = self.send_json(&url, &query)?;
         wire::parse_decision(status, &body)
+    }
+
+    /// Ask whether an **agent may act on behalf of a user**. Synchronous twin of
+    /// [`crate::IamClient::check_delegated`] — same strict-intersection semantics, same refusal
+    /// of an empty actor chain.
+    ///
+    /// # Errors
+    /// [`IamError::Config`] on an empty actor chain; otherwise as [`check`](Self::check).
+    pub fn check_delegated(
+        &self,
+        subject: Subject,
+        actors: Vec<String>,
+        permission: impl Into<String>,
+    ) -> Result<Decision, IamError> {
+        self.check_delegated_with(DecisionQuery {
+            subject,
+            permission: permission.into(),
+            actors,
+            ..DecisionQuery::default()
+        })
+    }
+
+    /// [`check_delegated`](Self::check_delegated) with a fully-built query.
+    ///
+    /// # Errors
+    /// [`IamError::Config`] when `query.actors` is empty; otherwise as [`check`](Self::check).
+    pub fn check_delegated_with(&self, query: DecisionQuery) -> Result<Decision, IamError> {
+        self.check(require_actors(query)?)
+    }
+
+    /// Verify a **delegated** bearer token through RFC 7662 introspection. Synchronous twin of
+    /// [`crate::IamClient::verify_delegated_token`], with identical fail-closed rules: the view
+    /// comes from the introspected claims, never the local parse, and `Ok(None)` means "this
+    /// token is not delegated", not "this token is fine".
+    ///
+    /// # Errors
+    /// [`IamError::TokenInvalid`] when the token is delegated but malformed or unconfirmed;
+    /// [`IamError::Config`] when no introspection endpoint is configured.
+    pub fn verify_delegated_token(&self, jwt: &str) -> Result<Option<DelegatedBearer>, IamError> {
+        let Some(local) = inspect_delegated_bearer(jwt)? else {
+            return Ok(None);
+        };
+
+        let endpoint = self.config.introspection_endpoint();
+        if endpoint.is_empty() {
+            return Err(IamError::Config(
+                "delegated tokens require an introspection endpoint".to_string(),
+            ));
+        }
+
+        let mut request = self.http.post(&endpoint).header(ACCEPT, "application/json");
+        if let Some(token) = self.resolve_token() {
+            request = request.header(AUTHORIZATION, format!("Bearer {token}"));
+        }
+        let response = request
+            .form(&[("token", jwt)])
+            .send()
+            .map_err(map_reqwest_error)?;
+        let status = response.status().as_u16();
+        let body = response.bytes().map_err(map_reqwest_error)?;
+
+        wire::parse_introspection(status, &body, &local)
+            .map(Some)
+            .ok_or_else(|| {
+                IamError::TokenInvalid("introspection did not confirm the delegation".to_string())
+            })
     }
 
     /// List the resources a subject can reach under a relation.

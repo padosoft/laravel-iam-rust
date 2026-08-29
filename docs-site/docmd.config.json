@@ -48,7 +48,8 @@
         { "title": "Verifying tokens", "path": "/guides/verifying-tokens" },
         { "title": "Listing resources (ReBAC)", "path": "/guides/listing-resources" },
         { "title": "The blocking client", "path": "/guides/blocking-client" },
-        { "title": "Fail-closed patterns", "path": "/guides/fail-closed-patterns" }
+        { "title": "Fail-closed patterns", "path": "/guides/fail-closed-patterns" },
+        { "title": "Delegated access (agents)", "path": "/guides/delegated-access" }
       ]
     },
     {

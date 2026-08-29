@@ -56,6 +56,7 @@
 
 mod client;
 mod config;
+mod delegation;
 mod error;
 pub mod manifest;
 mod types;
@@ -66,6 +67,10 @@ pub mod blocking;
 
 pub use client::IamClient;
 pub use config::IamClientBuilder;
+pub use delegation::{
+    actor_chain_from_claims, delegated_bearer_from_claims, inspect_delegated_bearer, is_delegated,
+    parse_scopes, DelegatedBearer, TYP_DELEGATED,
+};
 pub use error::IamError;
 pub use manifest::{validate_manifest, ManifestValidation};
 pub use types::{Claims, Decision, DecisionQuery, Resource, Subject};
